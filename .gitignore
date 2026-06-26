@@ -1,0 +1,34 @@
+# dependências & build
+node_modules/
+dist/
+*.wgt
+.vite/
+
+# SEGREDOS / dados pessoais — NUNCA commitar
+CLAUDE.md
+.claude/
+workspace/
+*.m3u
+*.m3u8
+.env
+.env.*
+!.env.example
+# certificados de assinatura (chaves privadas)
+cert/
+*.p12
+*.pri
+*.csr
+*.pwd
+
+# desktop (Tauri) futuro
+src-tauri/target/
+
+# testes (Playwright)
+test-results/
+playwright-report/
+blob-report/
+.last-run.json
+
+# misc
+.DS_Store
+*.log

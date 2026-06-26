@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets"
+        id="http://iptvplayer/app" version="0.1.0" viewmodes="maximized">
+  <tizen:application id="iPtVpLaYeR.IPTVPlayer" package="iPtVpLaYeR" required_version="2.3"/>
+  <name>IPTVPlayer</name>
+  <author>Adriano Franco</author>
+  <description>Player de IPTV leve (Xtream/M3U) com EPG e cache.</description>
+  <icon src="icon.png"/>
+  <content src="index.html"/>
+
+  <!-- roda em qualquer resolucao de tela de TV -->
+  <feature name="http://tizen.org/feature/screen.size.all"/>
+
+  <!-- rede: provider via http/https + AVPlay -->
+  <tizen:privilege name="http://tizen.org/privilege/internet"/>
+  <tizen:profile name="tv"/>
+
+  <!-- libera fetch/navegacao p/ qualquer host do provider (catalogo e streams) -->
+  <access origin="*" subdomains="true"/>
+  <tizen:allow-navigation>*</tizen:allow-navigation>
+
+  <tizen:setting screen-orientation="landscape" context-menu="disable"
+                 background-support="disable" encryption="disable"
+                 install-location="auto" hwkey-event="enable"/>
+</widget>

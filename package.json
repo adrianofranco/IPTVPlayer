@@ -1,0 +1,24 @@
+{
+  "name": "iptv-player",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Player de IPTV leve para Tizen / browser / desktop (Tauri)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "package:wgt": "npm run build && node scripts/package-wgt.mjs",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@types/node": "^26.0.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  },
+  "dependencies": {
+    "hls.js": "^1.6.16"
+  }
+}
