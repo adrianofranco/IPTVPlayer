@@ -139,6 +139,7 @@ html.av-playing body,
 html.av-playing .player,
 html.av-playing .player-stage,
 html.av-playing .player-av { background: transparent !important; }
+html.av-playing .player-av { visibility: hidden; }
 
 /* painel de debug on-screen (so quando ?debug / localStorage iptv:debug=1) */
 #dbg {
