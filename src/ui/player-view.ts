@@ -15,13 +15,17 @@ interface Ctrl {
   icon: string;
 }
 
-const SEEK_STEP = 30; // segundos por toque em ⏪/⏩
+const SEEK_BASE = 2;
+const SEEK_STEP_MAX = 60;
+const SEEK_COMMIT_MS = 500;
+const SEEK_TICK_MS = 150;
 const HIDE_MS = 4000;
 
 /**
  * Reproducao em tela cheia, com barra de controles SOBREPOSTA (semitransparente)
- * que some por inatividade. Botoes focaveis por D-pad: Voltar e, p/ VOD,
- * retroceder/play-pause/avancar + barra de progresso. Live nao tem seek.
+ * que some por inatividade. No VOD, ◀/▶ fazem seek acumulado direto (o foco fica
+ * no ⏯; Voltar fisico sai; ⏪/⏩ seguem clicaveis por mouse). Live nao tem seek —
+ * la ◀/▶ movem o foco entre os botoes.
  */
 export class PlayerView implements Screen {
   readonly el: HTMLElement;
@@ -34,13 +38,21 @@ export class PlayerView implements Screen {
   private readonly ctrls: Ctrl[];
   private readonly btnEls: HTMLElement[] = [];
   private readonly isVod: boolean;
+  private readonly seekEl: HTMLElement;
   private player?: Player;
   private focus = 0;
   private paused = false;
   private cur = 0;
+  private dur = 0;
   private lastSaved = 0;
   private resumed = false;
   private hideTimer?: ReturnType<typeof setTimeout>;
+  private seekFrom = 0;
+  private seekTarget = 0;
+  private seekStep = 0;
+  private seekDir = 0;
+  private seekLastTick = 0;
+  private seekTimer?: ReturnType<typeof setTimeout>;
 
   constructor(
     private readonly src: PlaySource,
@@ -117,9 +129,13 @@ export class PlayerView implements Screen {
     this.overlay.appendChild(top);
     this.overlay.appendChild(controls);
 
+    this.seekEl = document.createElement('div');
+    this.seekEl.className = 'player-seek';
+
     this.el.appendChild(this.stage);
     this.el.appendChild(this.msgEl);
     this.el.appendChild(this.overlay);
+    this.el.appendChild(this.seekEl);
 
     this.el.addEventListener('mousemove', () => this.showBar());
   }
@@ -160,6 +176,7 @@ export class PlayerView implements Screen {
 
   destroy(): void {
     if (this.hideTimer) clearTimeout(this.hideTimer);
+    if (this.seekTimer) clearTimeout(this.seekTimer); // rajada pendente ao sair: descarta
     this.saveProgress();
     this.player?.destroy();
     this.el.remove();
@@ -168,10 +185,12 @@ export class PlayerView implements Screen {
   handleAction(action: RemoteAction): void {
     switch (action) {
       case 'left':
-        this.moveFocus(-1);
+        if (this.isVod) this.seekPress(-1);
+        else this.moveFocus(-1);
         break;
       case 'right':
-        this.moveFocus(1);
+        if (this.isVod) this.seekPress(1);
+        else this.moveFocus(1);
         break;
       case 'enter':
         this.activate(this.ctrls[this.focus].id);
@@ -199,8 +218,8 @@ export class PlayerView implements Screen {
   private activate(id: Ctrl['id']): void {
     if (id === 'back') this.close();
     else if (id === 'play') this.player?.togglePlay();
-    else if (id === 'rew') this.player?.seekBy(-SEEK_STEP);
-    else if (id === 'fwd') this.player?.seekBy(SEEK_STEP);
+    else if (id === 'rew') this.seekPress(-1);
+    else if (id === 'fwd') this.seekPress(1);
   }
 
   private renderFocus(): void {
@@ -213,16 +232,56 @@ export class PlayerView implements Screen {
     if (b) b.textContent = this.paused ? '▶' : '⏸';
   }
 
+  private seekPress(dir: -1 | 1): void {
+    if (!this.isVod) return;
+    const now = Date.now();
+    const active = this.seekTimer !== undefined;
+    if (active) clearTimeout(this.seekTimer);
+    this.seekTimer = setTimeout(() => this.commitSeek(), SEEK_COMMIT_MS);
+    // tecla segurada: auto-repeat chega a ~30Hz; limita a cadencia do acumulo
+    if (active && now - this.seekLastTick < SEEK_TICK_MS) return;
+    if (!active) {
+      this.seekFrom = this.cur;
+      this.seekTarget = this.cur;
+      this.seekStep = 0;
+      this.seekDir = 0;
+    }
+    this.seekLastTick = now;
+    this.seekStep = dir === this.seekDir ? Math.min(this.seekStep * 2, SEEK_STEP_MAX) : SEEK_BASE;
+    this.seekDir = dir;
+    const max = this.dur > 0 ? Math.max(0, this.dur - 2) : Infinity;
+    this.seekTarget = Math.max(0, Math.min(max, this.seekTarget + dir * this.seekStep));
+    this.renderSeekPreview();
+  }
+
+  private commitSeek(): void {
+    this.seekTimer = undefined;
+    this.seekEl.style.display = 'none';
+    this.player?.seekTo(this.seekTarget);
+    this.cur = this.seekTarget; // otimista: o proximo timeupdate confirma
+    if (this.dur > 0) this.renderProgress(this.seekTarget);
+  }
+
+  private renderSeekPreview(): void {
+    const delta = this.seekTarget - this.seekFrom;
+    this.seekEl.textContent = `${delta < 0 ? '⏪ −' : '⏩ +'}${fmtDelta(delta)}`;
+    this.seekEl.style.display = 'block';
+    if (this.dur > 0) this.renderProgress(this.seekTarget);
+  }
+
+  private renderProgress(sec: number): void {
+    this.fill.style.width = `${Math.min(100, (sec / this.dur) * 100)}%`;
+    this.timeEl.textContent = `${fmt(sec)} / ${fmt(this.dur)}`;
+  }
+
   private onTime(current: number, duration: number): void {
     this.cur = current;
+    if (duration > 0) this.dur = duration;
     if (!this.resumed && this.isVod && this.opts.startAt && this.opts.startAt > 0) {
       this.resumed = true;
       this.player?.seekTo(this.opts.startAt);
     }
-    if (this.isVod && duration > 0) {
-      this.fill.style.width = `${Math.min(100, (current / duration) * 100)}%`;
-      this.timeEl.textContent = `${fmt(current)} / ${fmt(duration)}`;
-    }
+    if (this.isVod && this.dur > 0 && !this.seekTimer) this.renderProgress(current);
     if (this.opts.onProgress && current - this.lastSaved >= 3) {
       this.lastSaved = current;
       this.opts.onProgress(current);
@@ -261,4 +320,9 @@ function fmt(sec: number): string {
   const h = Math.floor(sec / 3600);
   const ss = String(s).padStart(2, '0');
   return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+}
+
+function fmtDelta(sec: number): string {
+  const abs = Math.round(Math.abs(sec));
+  return abs < 60 ? `${abs}s` : fmt(abs);
 }

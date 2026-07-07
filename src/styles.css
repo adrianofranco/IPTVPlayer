@@ -212,3 +212,19 @@ html.av-playing .player-av { visibility: hidden; }
 }
 .player-btn.focused { background: #2563eb; box-shadow: 0 0 0 3px #ffffff66; }
 .player-time { flex: none; color: #dfe6f0; font-size: 20px; font-variant-numeric: tabular-nums; }
+/* indicador do seek acumulado (rajada de ◀/▶ no VOD, estilo YouTube) */
+.player-seek {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  display: none;
+  padding: 14px 30px;
+  border-radius: 12px;
+  background: #000000b3;
+  color: #fff;
+  font-size: 34px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}

@@ -187,6 +187,35 @@ test('Player: controles sobrepostos e Voltar retorna', async ({ page }) => {
   await expect(page.locator('.detail h1')).toBeVisible();
 });
 
+test('Player VOD: ◀/▶ acumulam seek exponencial com debounce (estilo YouTube)', async ({ page }) => {
+  await press(page, 'ArrowDown'); // Filmes
+  await enterAndWait(page); // categorias
+  await enterAndWait(page); // 1a categoria -> filmes
+  await expect.poll(() => topRows(page).count()).toBeGreaterThan(0);
+  await enterAndWait(page); // filme -> detalhe
+  await enterAndWait(page); // OK -> player
+  const video = page.locator('.player video');
+  await expect(video).toHaveCount(1);
+  const before = await video.evaluate((v: HTMLVideoElement) => v.currentTime);
+
+  // toques espaçados >150ms (tick de hold) e <500ms (debounce): mesma rajada
+  await page.keyboard.press('ArrowRight'); // +2s
+  await page.waitForTimeout(200);
+  await page.keyboard.press('ArrowRight'); // +4s → acumulado +6s
+  await expect(page.locator('.player-seek')).toHaveText(/\+6s/);
+  await page.waitForTimeout(200);
+  await page.keyboard.press('ArrowRight'); // +8s → acumulado +14s
+  await expect(page.locator('.player-seek')).toHaveText(/\+14s/);
+
+  // 500ms sem toque: aplica o seek UMA vez e esconde o indicador
+  await expect(page.locator('.player-seek')).toBeHidden();
+  if (CHROME) {
+    await expect
+      .poll(() => video.evaluate((v: HTMLVideoElement) => v.currentTime), { timeout: 10_000 })
+      .toBeGreaterThan(before + 12);
+  }
+});
+
 test('Último assistido aparece na Home após assistir (persistido)', async ({ page }) => {
   await press(page, 'ArrowDown'); // Filmes
   await enterAndWait(page);
