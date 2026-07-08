@@ -108,6 +108,9 @@ test('Ao Vivo: autoplay de fundo, canais numerados e zapping', async ({ page }) 
   );
   console.log('LIVE métricas:', live);
 
+  // spinner de sintonia some quando o vídeo toca (erros ficam persistentes aí)
+  await expect(page.locator('.live-status')).toHaveClass(/hidden/);
+
   // termina num canal DIFERENTE do inicial (pode até ser de outra categoria)
   await press(page, 'PageUp');
   const name2 = (await page.locator('.live-name').textContent()) ?? '';

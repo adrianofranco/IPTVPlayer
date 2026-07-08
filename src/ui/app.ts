@@ -346,7 +346,9 @@ export class App {
 
   private startLiveBackdrop(channels: Stream[]): void {
     if (this.liveBackdrop) return;
-    this.liveBackdrop = new LiveBackdrop(this.root, (m) => this.toast(m));
+    // feedback de sintonia/erro fica no proprio backdrop (persistente),
+    // nao em toast (que some e deixa a tela preta sem explicacao)
+    this.liveBackdrop = new LiveBackdrop(this.root);
     // autoplay: ultimo assistido se for canal ao vivo; senao o canal padrao.
     // Nao salva como "ultimo assistido" — so escolha explicita conta.
     const lw = getLastWatched();

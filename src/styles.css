@@ -222,8 +222,39 @@ html.av-playing .live-backdrop,
 html.av-playing .player-av { background: transparent !important; }
 html.av-playing .player-av { visibility: hidden; }
 
+/* spinner compartilhado (sintonia do live, load do player) */
+.spinner {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border: 4px solid #ffffff2e;
+  border-top-color: #67e8f9;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* --- modo TV ao vivo: video atras, telas translucidas --- */
 .live-backdrop { position: absolute; inset: 0; background: #000; }
+/* status central do backdrop: sintonizando / erro (persiste ate a proxima troca) */
+.live-status {
+  position: absolute;
+  inset: 0;
+  z-index: 2; /* acima do <video>/<object> irmao */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  text-align: center;
+  padding: 0 10vw;
+  font-size: 22px;
+  text-shadow: 0 1px 4px #000c;
+}
+.live-status.hidden { display: none; }
+.live-status .status-error { color: #fde68a; }
 /* scrim so nas telas de topo (a ListView embutida na busca e filha de .search-results) */
 .live-tv > .screen { background: #0b0b0fb3; }
 .live-tv .screen-header, .live-tv .search-bar { background: #14141cd9; }
@@ -269,6 +300,7 @@ html.av-playing .player-av { visibility: hidden; }
   display: none;
   align-items: center;
   justify-content: center;
+  gap: 18px;
   text-align: center;
   padding: 48px;
   font-size: 24px;

@@ -147,6 +147,7 @@ export class PlayerView implements Screen {
   }
 
   private async init(): Promise<void> {
+    this.showLoading(); // some no onPlaying (AVPlay: prepareAsync concluido)
     this.player = await createPlayer({
       onPlaying: () => {
         this.paused = false;
@@ -290,6 +291,15 @@ export class PlayerView implements Screen {
 
   private saveProgress(): void {
     if (this.opts.onProgress && this.cur > 0) this.opts.onProgress(this.cur);
+  }
+
+  private showLoading(): void {
+    this.msgEl.textContent = '';
+    const sp = document.createElement('div');
+    sp.className = 'spinner';
+    this.msgEl.appendChild(sp);
+    this.msgEl.appendChild(document.createTextNode('Carregando…'));
+    this.msgEl.style.display = 'flex';
   }
 
   private showMessage(m: string): void {
