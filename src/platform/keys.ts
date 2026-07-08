@@ -1,5 +1,7 @@
 // Mapeia teclas do controle remoto (Tizen) e do teclado (dev) para acoes logicas.
 
+import { dbg } from './debug';
+
 export type RemoteAction =
   | 'up'
   | 'down'
@@ -10,6 +12,8 @@ export type RemoteAction =
   | 'play'
   | 'pause'
   | 'stop'
+  | 'channelUp'
+  | 'channelDown'
   | 'red'
   | 'green'
   | 'yellow'
@@ -27,6 +31,10 @@ const KEY_MAP: Record<number, RemoteAction> = {
   415: 'play',
   19: 'pause',
   413: 'stop',
+  427: 'channelUp', // Tizen CH ∧
+  428: 'channelDown', // Tizen CH ∨
+  33: 'channelUp', // PageUp (dev)
+  34: 'channelDown', // PageDown (dev)
   403: 'red',
   404: 'green',
   405: 'yellow',
@@ -52,12 +60,15 @@ export function registerTizenKeys(): void {
     'MediaPause',
     'MediaStop',
     'MediaPlayPause',
+    'ChannelUp',
+    'ChannelDown',
   ];
   for (const k of keys) {
     try {
       dev.registerKey(k);
-    } catch {
-      /* tecla nao suportada nesse modelo — ignora */
+    } catch (e) {
+      // requer privilegio tv.inputdevice no config.xml — sem ele falha TUDO
+      dbg(`registerKey(${k}) falhou: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 }

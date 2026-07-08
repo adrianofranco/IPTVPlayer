@@ -18,6 +18,7 @@ interface RawCategory {
 interface RawStream {
   stream_id: string | number;
   name: string;
+  num?: string | number;
   category_id?: string | number;
   stream_icon?: string;
   container_extension?: string;
@@ -155,7 +156,10 @@ export class XtreamSource implements Source {
       url: this.streamUrl(kind, id, ext),
     };
     if (s.stream_icon) stream.logo = s.stream_icon;
-    if (kind === 'live') stream.epgChannelId = id;
+    if (kind === 'live') {
+      stream.epgChannelId = id;
+      if (s.num != null) stream.num = Number(s.num);
+    }
     if (ext) stream.ext = ext;
     return stream;
   }

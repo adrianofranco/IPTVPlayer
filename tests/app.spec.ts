@@ -65,19 +65,31 @@ test('Cache: 2ª entrada não refaz a requisição', async ({ page }) => {
   expect(reqs).toBe(1);
 });
 
-test('Drill até o player (live): canal → detalhe → player com <video>', async ({ page }) => {
-  await enterAndWait(page); // Ao Vivo -> categorias
+test('Ao Vivo: autoplay de fundo, canais numerados e zapping', async ({ page }) => {
+  await enterAndWait(page); // Ao Vivo → categorias translúcidas
   await expect(topHeader(page)).toContainText('Ao Vivo');
-  await enterAndWait(page); // 1a categoria -> canais
-  await expect.poll(() => topRows(page).count()).toBeGreaterThan(0);
-  await enterAndWait(page); // 1o canal -> detalhe
-  await expect(page.locator('.detail h1')).toBeVisible();
-  await enterAndWait(page); // OK -> player
-  await expect(page.locator('.player')).toBeVisible();
-  await expect(page.locator('.player video')).toHaveCount(1);
+  // backdrop tocando atrás (autoplay: último canal ao vivo ou Globo SP FHD)
+  await expect(page.locator('.live-backdrop video')).toHaveCount(1);
+  // categorias usam o espaço: contagem de canais na sublinha
+  await expect(topRows(page).first().locator('.row-sub')).toContainText('canais');
 
-  // diagnóstico (sem assert): live HLS toca no browser via hls.js?
-  const live = await page.locator('.player video').evaluate(
+  await enterAndWait(page); // 1a categoria → canais numerados
+  const label = await topRows(page).first().locator('.row-label').textContent();
+  expect(label).toMatch(/^\d+ · /);
+
+  await press(page, 'ArrowDown'); // 2º canal da categoria
+  await enterAndWait(page); // OK → modo assistir (banner sobre o vídeo)
+  await expect(page.locator('.live-banner')).toBeVisible();
+  await expect(page.locator('.live-num')).toHaveText(/^\d+$/);
+  const name1 = (await page.locator('.live-name').textContent()) ?? '';
+
+  await press(page, 'PageUp'); // CH ∧ zapeia +1 na lista indexada
+  await expect(page.locator('.live-name')).not.toHaveText(name1);
+  await press(page, 'PageDown'); // CH ∨ desfaz o zap (determinístico)
+  await expect(page.locator('.live-name')).toHaveText(name1);
+
+  // diagnóstico (sem assert): o canal de fundo toca no browser via hls.js?
+  const live = await page.locator('.live-backdrop video').evaluate(
     (v: HTMLVideoElement) =>
       new Promise((res) => {
         const t0 = Date.now();
@@ -88,7 +100,6 @@ test('Drill até o player (live): canal → detalhe → player com <video>', asy
               readyState: v.readyState,
               currentTime: Number(v.currentTime.toFixed(2)),
               advanced: v.currentTime > 0.2,
-              errorCode: v.error?.code ?? null,
               srcKind: v.currentSrc.startsWith('blob:') ? 'MSE(hls.js)' : 'direto',
             });
           }
@@ -97,11 +108,21 @@ test('Drill até o player (live): canal → detalhe → player com <video>', asy
   );
   console.log('LIVE métricas:', live);
 
-  const env = await page.evaluate(() => ({
-    canPlayHls: document.createElement('video').canPlayType('application/vnd.apple.mpegurl'),
-    mse: 'MediaSource' in window,
-  }));
-  console.log('LIVE env:', env);
+  // termina num canal DIFERENTE do inicial (pode até ser de outra categoria)
+  await press(page, 'PageUp');
+  const name2 = (await page.locator('.live-name').textContent()) ?? '';
+  expect(name2).not.toBe(name1);
+
+  // OK sai do modo assistir com a lista focada no canal ATUAL (pós-zap);
+  // se o canal for de outra categoria, a lista é trocada pela dela
+  await press(page, 'Enter');
+  await expect(page.locator('.list-viewport').last().locator('.list-row.focused')).toContainText(
+    name2,
+  );
+  await press(page, 'Backspace'); // categorias
+  await press(page, 'Backspace'); // Home — sair da seção desliga o vídeo
+  await expect(page.locator('.screen-header')).toHaveText('IPTV Player');
+  await expect(page.locator('.live-backdrop')).toHaveCount(0);
 });
 
 test('VOD: bytes do filme fluem pelo stack (decode garantido no Chrome)', async ({ page }) => {

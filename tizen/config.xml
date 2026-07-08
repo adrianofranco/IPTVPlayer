@@ -13,6 +13,8 @@
 
   <!-- rede: provider via http/https + AVPlay -->
   <tizen:privilege name="http://tizen.org/privilege/internet"/>
+  <!-- sem esse privilegio, tvinputdevice.registerKey (CH ∧/∨, coloridas) falha -->
+  <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
   <tizen:profile name="tv"/>
 
   <!-- libera fetch/navegacao p/ qualquer host do provider (catalogo e streams) -->

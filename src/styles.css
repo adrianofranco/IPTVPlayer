@@ -218,8 +218,33 @@ html.av-playing,
 html.av-playing body,
 html.av-playing .player,
 html.av-playing .player-stage,
+html.av-playing .live-backdrop,
 html.av-playing .player-av { background: transparent !important; }
 html.av-playing .player-av { visibility: hidden; }
+
+/* --- modo TV ao vivo: video atras, telas translucidas --- */
+.live-backdrop { position: absolute; inset: 0; background: #000; }
+/* scrim so nas telas de topo (a ListView embutida na busca e filha de .search-results) */
+.live-tv > .screen { background: #0b0b0fb3; }
+.live-tv .screen-header, .live-tv .search-bar { background: #14141cd9; }
+.live-tv > .screen.live-watch { background: transparent; }
+
+/* banner de canal do modo assistir (some sozinho) */
+.live-banner {
+  position: absolute;
+  left: 48px;
+  bottom: 48px;
+  max-width: 60vw;
+  padding: 18px 26px;
+  border-radius: 12px;
+  background: #0b0b0fd9;
+  transition: opacity 0.25s;
+}
+.live-banner.hidden { opacity: 0; }
+.live-banner-row { display: flex; align-items: baseline; gap: 14px; }
+.live-num { font-size: 30px; font-weight: 700; color: #67e8f9; font-variant-numeric: tabular-nums; }
+.live-name { font-size: 26px; font-weight: 600; }
+.live-epg { margin-top: 6px; font-size: 18px; color: #9aa3b2; }
 
 /* painel de debug on-screen (so quando ?debug / localStorage iptv:debug=1) */
 #dbg {

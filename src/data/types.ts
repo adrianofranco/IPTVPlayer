@@ -15,6 +15,8 @@ export interface Stream {
   kind: 'live' | 'movie';
   name: string;
   categoryId: string;
+  /** So live: numero do canal (zapping) — vem do `num` da Player API. */
+  num?: number;
   logo?: string;
   /** URL pronta para o player (ja montada pela Source). */
   url: string;

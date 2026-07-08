@@ -96,6 +96,12 @@ export class ListView implements Screen {
     return this.index;
   }
 
+  /** Foca (e revela) o item `i` — ex.: sincronizar com o canal zapeado. */
+  focusItem(i: number): void {
+    if (!this.items.length) return;
+    this.focusIndex(Math.max(0, Math.min(this.items.length - 1, i)));
+  }
+
   mount(parent: HTMLElement): void {
     parent.appendChild(this.el);
     this.focusIndex(Math.max(0, Math.min(this.items.length - 1, this.opts.initialIndex ?? 0)));

@@ -5,7 +5,7 @@ import { createSource } from '../data/factory';
 import { getLastWatched, saveLastWatched, updatePosition } from '../data/last-watched';
 import { CatalogSearch, type SearchHit } from '../data/search';
 import { addSource, getActiveSource, getSources, setActive } from '../data/sources-store';
-import type { Category, ContentKind, EpgEntry } from '../data/types';
+import type { Category, ContentKind, EpgEntry, Stream } from '../data/types';
 import { dbg, isDebug, setDebug } from '../platform/debug';
 import { actionFromKey, registerTizenKeys } from '../platform/keys';
 import type { PlaySource } from '../player/player';
@@ -13,6 +13,8 @@ import { DetailView } from './detail-view';
 import { FormView } from './form-view';
 import { GridView } from './grid-view';
 import { ListView, type ListItem } from './list-view';
+import { LiveBackdrop } from './live-backdrop';
+import { LiveWatchView } from './live-watch';
 import { PlayerView } from './player-view';
 import { SearchView } from './search-view';
 import { getViewMode, setViewMode, type ViewMode } from './view-mode';
@@ -23,6 +25,7 @@ export class App {
   private readonly stack: Screen[] = [];
   private source?: CachedSource;
   private activeName = '';
+  private liveBackdrop?: LiveBackdrop;
 
   constructor(private readonly root: HTMLElement) {}
 
@@ -87,6 +90,7 @@ export class App {
   }
 
   private resetToHome(): void {
+    this.stopLiveBackdrop();
     while (this.stack.length) this.stack.pop()?.destroy();
     this.openHome();
   }
@@ -242,11 +246,131 @@ export class App {
     }
   }
 
+  // ---- Ao Vivo: modo TV (video atras, telas translucidas, zapping) ----
+  private async openLive(): Promise<void> {
+    try {
+      const source = this.requireSource();
+      const [cats, all] = await this.withLoading(() =>
+        Promise.all([source.categories('live'), source.streams('live')]),
+      );
+      // ordem de zap/numeracao = num do provider
+      const channels = all.slice().sort((a, b) => (a.num ?? 1e9) - (b.num ?? 1e9));
+      this.startLiveBackdrop(channels);
+
+      const counts: Record<string, number> = {};
+      for (const c of channels) counts[c.categoryId] = (counts[c.categoryId] ?? 0) + 1;
+      const index = new CatalogSearch(source, ['live']);
+      this.push(
+        new SearchView({
+          title: 'Ao Vivo — categorias',
+          placeholder: 'Buscar em Ao Vivo…',
+          base: {
+            items: cats.map((c) => ({ label: c.name, sublabel: `${counts[c.id] ?? 0} canais` })),
+            hint: '▲ no topo da lista para buscar em Ao Vivo',
+            emptyText: 'Nenhuma categoria',
+            onSelect: (i) => this.openLiveChannels(cats[i], cats, channels),
+          },
+          search: async (q, onStage) => {
+            await index.ensureLoaded(onStage);
+            return index.search(q);
+          },
+          onSelect: (hit) => {
+            const s = channels.find((c) => c.id === hit.id);
+            if (s) this.watchLive(channels, s);
+          },
+          onBack: () => {
+            this.stopLiveBackdrop(); // sair da secao desliga o video
+            this.pop();
+          },
+        }),
+      );
+    } catch (err) {
+      this.fail(err);
+    }
+  }
+
+  private openLiveChannels(
+    cat: Category,
+    cats: Category[],
+    channels: Stream[],
+    initialIndex?: number,
+    swap = false,
+  ): void {
+    const list = channels.filter((s) => s.categoryId === cat.id);
+    const view = new ListView({
+      title: cat.name,
+      items: list.map((s, i) => ({ label: `${s.num ?? i + 1} · ${s.name}`, icon: s.logo })),
+      initialIndex,
+      onSelect: (i) =>
+        this.watchLive(channels, list[i], (cur) => {
+          // volta do modo assistir focando o canal zapeado; se ele for de
+          // OUTRA categoria, troca a lista pela categoria dele
+          const idx = list.findIndex((c) => c.id === cur.id);
+          if (idx >= 0) return view.focusItem(idx);
+          const dest = cats.find((c) => c.id === cur.categoryId);
+          if (!dest) return;
+          const destIdx = channels
+            .filter((s) => s.categoryId === dest.id)
+            .findIndex((s) => s.id === cur.id);
+          this.openLiveChannels(dest, cats, channels, Math.max(0, destIdx), true);
+        }),
+      onBack: () => this.pop(),
+      emptyText: 'Vazio',
+    });
+    if (swap) this.swapTop(view);
+    else this.push(view);
+  }
+
+  /** Troca o canal do backdrop e persiste como ultimo assistido. */
+  private zapLive(s: Stream): void {
+    this.liveBackdrop?.play({ url: s.url, kind: 'live', title: s.name, epgChannelId: s.epgChannelId });
+    saveLastWatched({ title: s.name, url: s.url, kind: 'live', epgChannelId: s.epgChannelId, ts: Date.now() });
+  }
+
+  /** Modo assistir: some a lista, banner de canal, ▲▼/CH∧∨ zapeiam. */
+  private watchLive(channels: Stream[], s: Stream, onExitSync?: (cur: Stream) => void): void {
+    this.zapLive(s);
+    this.push(
+      new LiveWatchView({
+        channels,
+        startIndex: Math.max(0, channels.findIndex((c) => c.id === s.id)),
+        epg: (ch) => this.requireSource().shortEpg(ch, 1),
+        onZap: (c) => this.zapLive(c),
+        onExit: (cur) => {
+          this.pop();
+          onExitSync?.(cur);
+        },
+      }),
+    );
+  }
+
+  private startLiveBackdrop(channels: Stream[]): void {
+    if (this.liveBackdrop) return;
+    this.liveBackdrop = new LiveBackdrop(this.root, (m) => this.toast(m));
+    // autoplay: ultimo assistido se for canal ao vivo; senao o canal padrao.
+    // Nao salva como "ultimo assistido" — so escolha explicita conta.
+    const lw = getLastWatched();
+    if (lw && lw.kind === 'live') {
+      this.liveBackdrop.play({ url: lw.url, kind: 'live', title: lw.title, epgChannelId: lw.epgChannelId });
+      return;
+    }
+    const def = defaultChannel(channels);
+    if (def) {
+      this.liveBackdrop.play({ url: def.url, kind: 'live', title: def.name, epgChannelId: def.epgChannelId });
+    }
+  }
+
+  private stopLiveBackdrop(): void {
+    this.liveBackdrop?.destroy();
+    this.liveBackdrop = undefined;
+  }
+
   private async openCategories(kind: ContentKind): Promise<void> {
+    if (kind === 'live') return this.openLive();
     try {
       const source = this.requireSource();
       const cats = await this.withLoading(() => source.categories(kind));
-      const label = kind === 'live' ? 'Ao Vivo' : kind === 'movie' ? 'Filmes' : 'Séries';
+      const label = kind === 'movie' ? 'Filmes' : 'Séries';
       const index = new CatalogSearch(source, [kind]); // busca escopada na secao
       this.push(
         new SearchView({
@@ -434,4 +558,16 @@ export class App {
 
 function describeSource(s: SourceConfig): string {
   return s.type === 'xtream' ? 'Xtream' : s.type === 'm3u-url' ? 'M3U (URL)' : 'M3U (arquivo)';
+}
+
+const DEFAULT_LIVE = 'globo sp fhd';
+
+/** Canal padrao do autoplay: "Globo SP FHD" exato → contendo → primeiro da lista. */
+function defaultChannel(channels: Stream[]): Stream | undefined {
+  const norm = (s: string): string => s.toLowerCase().trim();
+  return (
+    channels.find((c) => norm(c.name) === DEFAULT_LIVE) ??
+    channels.find((c) => norm(c.name).includes(DEFAULT_LIVE)) ??
+    channels[0]
+  );
 }
