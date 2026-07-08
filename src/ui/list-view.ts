@@ -8,7 +8,8 @@ export interface ListItem {
 }
 
 export interface ListViewOptions {
-  title: string;
+  /** Sem title → sem header (uso embutido, ex.: resultados da busca). */
+  title?: string;
   items: ListItem[];
   onSelect: (index: number) => void;
   onBack?: () => void;
@@ -28,26 +29,28 @@ const OVERSCAN = 4;
 export class ListView implements Screen {
   readonly el: HTMLElement;
   private readonly viewport: HTMLElement;
+  private items: ListItem[];
+  private emptyText: string;
+  private emptyEl?: HTMLElement;
   private index = 0;
   private scroll = 0;
 
   constructor(private readonly opts: ListViewOptions) {
+    this.items = opts.items;
+    this.emptyText = opts.emptyText ?? 'Vazio';
+
     this.el = document.createElement('div');
     this.el.className = 'screen';
 
-    const header = document.createElement('div');
-    header.className = 'screen-header';
-    header.textContent = opts.title;
+    if (opts.title !== undefined) {
+      const header = document.createElement('div');
+      header.className = 'screen-header';
+      header.textContent = opts.title;
+      this.el.appendChild(header);
+    }
 
     this.viewport = document.createElement('div');
     this.viewport.className = 'list-viewport';
-
-    if (!opts.items.length) {
-      const empty = document.createElement('div');
-      empty.className = 'list-empty';
-      empty.textContent = opts.emptyText ?? 'Vazio';
-      this.viewport.appendChild(empty);
-    }
 
     // rolagem por mouse (dev); a TV usa D-pad
     this.viewport.addEventListener(
@@ -59,8 +62,21 @@ export class ListView implements Screen {
       { passive: false },
     );
 
-    this.el.appendChild(header);
     this.el.appendChild(this.viewport);
+  }
+
+  /** Troca os itens (ex.: resultados da busca) e volta o foco pro topo. */
+  setItems(items: ListItem[], emptyText?: string): void {
+    this.items = items;
+    if (emptyText !== undefined) this.emptyText = emptyText;
+    this.index = 0;
+    this.scroll = 0;
+    this.render();
+  }
+
+  /** Indice focado — p/ o dono decidir transicoes de foco (ex.: busca ▲ → input). */
+  get focusedIndex(): number {
+    return this.index;
   }
 
   mount(parent: HTMLElement): void {
@@ -88,7 +104,7 @@ export class ListView implements Screen {
         this.move(1);
         break;
       case 'enter':
-        if (this.opts.items.length) this.opts.onSelect(this.index);
+        if (this.items.length) this.opts.onSelect(this.index);
         break;
       case 'back':
         this.opts.onBack?.();
@@ -99,7 +115,7 @@ export class ListView implements Screen {
   }
 
   private move(delta: number): void {
-    const n = this.opts.items.length;
+    const n = this.items.length;
     if (!n) return;
     this.focusIndex(Math.max(0, Math.min(n - 1, this.index + delta)));
   }
@@ -122,12 +138,12 @@ export class ListView implements Screen {
   }
 
   private clampScroll(vh: number): void {
-    const max = Math.max(0, this.opts.items.length * ROW_H - vh);
+    const max = Math.max(0, this.items.length * ROW_H - vh);
     this.scroll = Math.max(0, Math.min(this.scroll, max));
   }
 
   private render(): void {
-    const items = this.opts.items;
+    const items = this.items;
     const vh = this.viewport.clientHeight || 720;
     const first = Math.max(0, Math.floor(this.scroll / ROW_H) - OVERSCAN);
     const last = Math.min(items.length - 1, Math.ceil((this.scroll + vh) / ROW_H) + OVERSCAN);
@@ -135,6 +151,18 @@ export class ListView implements Screen {
     for (const old of Array.from(this.viewport.querySelectorAll('.list-row'))) old.remove();
     for (let i = first; i <= last; i++) {
       this.viewport.appendChild(this.renderRow(i, items[i]));
+    }
+
+    if (!items.length) {
+      if (!this.emptyEl) {
+        this.emptyEl = document.createElement('div');
+        this.emptyEl.className = 'list-empty';
+        this.viewport.appendChild(this.emptyEl);
+      }
+      this.emptyEl.textContent = this.emptyText;
+    } else if (this.emptyEl) {
+      this.emptyEl.remove();
+      this.emptyEl = undefined;
     }
   }
 

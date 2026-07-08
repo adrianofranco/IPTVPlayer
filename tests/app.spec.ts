@@ -26,11 +26,12 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator('.screen-header')).toHaveText('IPTV Player');
 });
 
-test('Home: 4 botões e foco inicial no primeiro', async ({ page }) => {
+test('Home: 5 botões e foco inicial no primeiro', async ({ page }) => {
   const rows = page.locator('.list-row');
-  await expect(rows).toHaveCount(4);
+  await expect(rows).toHaveCount(5);
   await expect(rows.nth(0)).toContainText('Ao Vivo');
-  await expect(rows.nth(3)).toContainText('Opções');
+  await expect(rows.nth(3)).toContainText('Buscar');
+  await expect(rows.nth(4)).toContainText('Opções');
   await expect(rows.nth(0)).toHaveClass(/focused/);
 });
 
@@ -146,8 +147,8 @@ test('VOD: bytes do filme fluem pelo stack (decode garantido no Chrome)', async 
 });
 
 test('Opções → Limpar cache mostra toast', async ({ page }) => {
-  await press(page, 'ArrowDown', 3); // foca "Opções"
-  await expect(page.locator('.list-row').nth(3)).toHaveClass(/focused/);
+  await press(page, 'ArrowDown', 4); // foca "Opções"
+  await expect(page.locator('.list-row').nth(4)).toHaveClass(/focused/);
   await enterAndWait(page); // abre tela Opções
   await expect(topHeader(page)).toContainText('Opções');
   await press(page, 'ArrowDown'); // foca "Limpar cache" (item 1)
@@ -156,7 +157,7 @@ test('Opções → Limpar cache mostra toast', async ({ page }) => {
 });
 
 test('Opções → Fontes → Adicionar abre formulário', async ({ page }) => {
-  await press(page, 'ArrowDown', 3); // "Opções"
+  await press(page, 'ArrowDown', 4); // "Opções"
   await enterAndWait(page); // tela Opções
   await expect(topHeader(page)).toContainText('Opções');
   await enterAndWait(page); // "Fontes (listas)" (item 0, já focado)
@@ -184,6 +185,58 @@ test('Player: controles sobrepostos e Voltar retorna', async ({ page }) => {
   await expect(page.locator('.player-progress')).toBeVisible();
 
   await press(page, 'Backspace'); // Voltar sai do player
+  await expect(page.locator('.detail h1')).toBeVisible();
+});
+
+test('Busca: filtra o catálogo inteiro e abre um resultado', async ({ page }) => {
+  await press(page, 'ArrowDown', 3); // 🔍 Buscar
+  await enterAndWait(page);
+  const input = page.locator('.search-input');
+  await expect(input).toBeFocused();
+
+  await input.fill('a'); // curto demais
+  await expect(page.locator('.search-status')).toContainText('pelo menos 2');
+
+  await input.fill('amor');
+  // 1ª busca baixa as listas completas (live+filmes+séries, ~15MB) — dá tempo
+  const rows = page.locator('.search-results .list-row');
+  await expect(rows.first()).toBeVisible({ timeout: 120_000 });
+  await expect(page.locator('.search-status')).toContainText('resultado');
+  await expect(rows.first().locator('.row-sub')).toHaveText(/Ao Vivo|Filme|Série/);
+
+  // ▼ fecha o teclado/sai do input; OK abre o resultado (detalhe ou episódios)
+  await page.keyboard.press('ArrowDown');
+  await expect(input).not.toBeFocused();
+  await enterAndWait(page);
+});
+
+test('Seção: busca no header filtra só o tipo (Filmes)', async ({ page }) => {
+  await press(page, 'ArrowDown'); // Filmes
+  await enterAndWait(page); // categorias com busca no header
+  const input = page.locator('.search-input');
+  await expect(input).not.toBeFocused(); // seção abre navegando as categorias
+  await expect(topRows(page).first()).toBeInViewport();
+
+  await press(page, 'ArrowUp'); // topo da lista → sobe pro campo de busca
+  await expect(input).toBeFocused();
+  const status = page.locator('.search-status');
+  await input.fill('amor');
+  // espera a busca COMPLETAR (as categorias também são .list-row na mesma lista)
+  await expect(status).toContainText('resultado', { timeout: 120_000 });
+  // escopo da seção: só filmes
+  const rows = page.locator('.search-results .list-row');
+  const subs = await rows.locator('.row-sub').allTextContents();
+  expect(subs.length).toBeGreaterThan(0);
+  for (const s of subs) expect(s).toBe('Filme');
+
+  // limpar volta pras categorias
+  await input.fill('');
+  await expect(status).toContainText('▲ no topo');
+
+  await input.fill('amor');
+  await expect(status).toContainText('resultado');
+  await page.keyboard.press('ArrowDown'); // sai do input
+  await enterAndWait(page); // abre o detalhe do filme
   await expect(page.locator('.detail h1')).toBeVisible();
 });
 

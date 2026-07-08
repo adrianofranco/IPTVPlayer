@@ -3,6 +3,7 @@ import { CachedSource } from '../data/cached';
 import { detectSource, type SourceConfig } from '../data/config';
 import { createSource } from '../data/factory';
 import { getLastWatched, saveLastWatched, updatePosition } from '../data/last-watched';
+import { CatalogSearch, type SearchHit } from '../data/search';
 import { addSource, getActiveSource, getSources, setActive } from '../data/sources-store';
 import type { Category, ContentKind, EpgEntry } from '../data/types';
 import { isDebug, setDebug } from '../platform/debug';
@@ -12,6 +13,7 @@ import { DetailView } from './detail-view';
 import { FormView } from './form-view';
 import { ListView, type ListItem } from './list-view';
 import { PlayerView } from './player-view';
+import { SearchView } from './search-view';
 import type { Screen } from './screen';
 
 /** Controlador da app: pilha de telas + fonte ativa + carga de dados (cacheada). */
@@ -114,6 +116,7 @@ export class App {
     add('📺  Ao Vivo', () => void this.openCategories('live'));
     add('🎬  Filmes', () => void this.openCategories('movie'));
     add('📚  Séries', () => void this.openCategories('series'));
+    add('🔍  Buscar', () => this.openSearch());
     add('⚙️  Opções', () => this.openSettings());
 
     this.push(
@@ -195,18 +198,60 @@ export class App {
     );
   }
 
+  private openSearch(): void {
+    const source = this.requireSource();
+    // o indice (~30k entradas slim) vive so enquanto a tela de busca existe
+    const index = new CatalogSearch(source);
+    this.push(
+      new SearchView({
+        title: '🔍',
+        autoFocus: true,
+        search: async (q, onStage) => {
+          await index.ensureLoaded(onStage);
+          return index.search(q);
+        },
+        onSelect: (hit) => this.openHit(hit),
+        onBack: () => this.pop(),
+      }),
+    );
+  }
+
+  /** Abre um resultado de busca: serie → episodios; filme/canal → detalhe. */
+  private openHit(hit: SearchHit): void {
+    if (hit.kind === 'series') {
+      void this.openEpisodes(hit.name, hit.id);
+    } else {
+      void this.openDetail({
+        title: hit.name,
+        url: hit.url,
+        kind: hit.kind === 'live' ? 'live' : 'vod',
+        epgChannelId: hit.epgChannelId,
+      });
+    }
+  }
+
   private async openCategories(kind: ContentKind): Promise<void> {
     try {
       const source = this.requireSource();
       const cats = await this.withLoading(() => source.categories(kind));
       const label = kind === 'live' ? 'Ao Vivo' : kind === 'movie' ? 'Filmes' : 'Séries';
+      const index = new CatalogSearch(source, [kind]); // busca escopada na secao
       this.push(
-        new ListView({
+        new SearchView({
           title: `${label} — categorias`,
-          items: cats.map((c) => ({ label: c.name })),
-          onSelect: (i) => void this.openItems(kind, cats[i]),
+          placeholder: `Buscar em ${label}…`,
+          base: {
+            items: cats.map((c) => ({ label: c.name })),
+            hint: `▲ no topo da lista para buscar em ${label}`,
+            emptyText: 'Nenhuma categoria',
+            onSelect: (i) => void this.openItems(kind, cats[i]),
+          },
+          search: async (q, onStage) => {
+            await index.ensureLoaded(onStage);
+            return index.search(q);
+          },
+          onSelect: (hit) => this.openHit(hit),
           onBack: () => this.pop(),
-          emptyText: 'Nenhuma categoria',
         }),
       );
     } catch (err) {

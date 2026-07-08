@@ -20,12 +20,14 @@ export class CachedSource implements Source {
     return this.cached(`categories:${kind}`, () => this.inner.categories(kind));
   }
 
-  streams(kind: 'live' | 'movie', categoryId: string): Promise<Stream[]> {
-    return this.cached(`streams:${kind}:${categoryId}`, () => this.inner.streams(kind, categoryId));
+  streams(kind: 'live' | 'movie', categoryId?: string): Promise<Stream[]> {
+    return this.cached(`streams:${kind}:${categoryId ?? '*'}`, () =>
+      this.inner.streams(kind, categoryId),
+    );
   }
 
-  series(categoryId: string): Promise<Series[]> {
-    return this.cached(`series:${categoryId}`, () => this.inner.series(categoryId));
+  series(categoryId?: string): Promise<Series[]> {
+    return this.cached(`series:${categoryId ?? '*'}`, () => this.inner.series(categoryId));
   }
 
   episodes(seriesId: string): Promise<Episode[]> {

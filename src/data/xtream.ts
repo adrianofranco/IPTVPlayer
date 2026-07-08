@@ -82,18 +82,22 @@ export class XtreamSource implements Source {
     return raw.map((c) => ({ id: String(c.category_id), name: c.category_name, kind }));
   }
 
-  async streams(kind: 'live' | 'movie', categoryId: string): Promise<Stream[]> {
+  async streams(kind: 'live' | 'movie', categoryId?: string): Promise<Stream[]> {
     const action = kind === 'live' ? 'get_live_streams' : 'get_vod_streams';
-    const raw = await getJson<RawStream[]>(this.api(action, { category_id: categoryId }));
+    const raw = await getJson<RawStream[]>(
+      this.api(action, categoryId ? { category_id: categoryId } : {}),
+    );
     return raw.map((s) => this.toStream(kind, s));
   }
 
-  async series(categoryId: string): Promise<Series[]> {
-    const raw = await getJson<RawSeries[]>(this.api('get_series', { category_id: categoryId }));
+  async series(categoryId?: string): Promise<Series[]> {
+    const raw = await getJson<RawSeries[]>(
+      this.api('get_series', categoryId ? { category_id: categoryId } : {}),
+    );
     return raw.map((s) => ({
       id: String(s.series_id),
       name: s.name,
-      categoryId: String(s.category_id ?? categoryId),
+      categoryId: String(s.category_id ?? categoryId ?? ''),
       logo: s.cover || undefined,
       plot: s.plot || undefined,
     }));
