@@ -6,14 +6,16 @@ import { getLastWatched, saveLastWatched, updatePosition } from '../data/last-wa
 import { CatalogSearch, type SearchHit } from '../data/search';
 import { addSource, getActiveSource, getSources, setActive } from '../data/sources-store';
 import type { Category, ContentKind, EpgEntry } from '../data/types';
-import { isDebug, setDebug } from '../platform/debug';
+import { dbg, isDebug, setDebug } from '../platform/debug';
 import { actionFromKey, registerTizenKeys } from '../platform/keys';
 import type { PlaySource } from '../player/player';
 import { DetailView } from './detail-view';
 import { FormView } from './form-view';
+import { GridView } from './grid-view';
 import { ListView, type ListItem } from './list-view';
 import { PlayerView } from './player-view';
 import { SearchView } from './search-view';
+import { getViewMode, setViewMode, type ViewMode } from './view-mode';
 import type { Screen } from './screen';
 
 /** Controlador da app: pilha de telas + fonte ativa + carga de dados (cacheada). */
@@ -31,7 +33,10 @@ export class App {
       // enquanto um campo de texto está focado, deixa o browser/IME tratar
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
       const action = actionFromKey(e);
-      if (!action) return;
+      if (!action) {
+        dbg(`tecla não mapeada: keyCode=${e.keyCode} key=${e.key}`);
+        return;
+      }
       e.preventDefault();
       this.top?.handleAction(action);
     });
@@ -72,6 +77,13 @@ export class App {
     if (this.stack.length <= 1) return;
     this.stack.pop()?.destroy();
     this.top?.setVisible(true);
+  }
+
+  /** Troca a tela do topo sem mexer no resto da pilha (toggle lista↔grade). */
+  private swapTop(view: Screen): void {
+    this.stack.pop()?.destroy();
+    this.stack.push(view);
+    view.mount(this.root);
   }
 
   private resetToHome(): void {
@@ -264,38 +276,65 @@ export class App {
       const source = this.requireSource();
       if (kind === 'series') {
         const list = await this.withLoading(() => source.series(cat.id));
-        this.push(
-          new ListView({
-            title: cat.name,
-            items: list.map((s) => ({ label: s.name, icon: s.logo })),
-            onSelect: (i) => void this.openEpisodes(list[i].name, list[i].id),
-            onBack: () => this.pop(),
-            emptyText: 'Vazio',
-          }),
+        this.pushBrowse(
+          cat.name,
+          list.map((s) => ({ label: s.name, icon: s.logo })),
+          (i) => void this.openEpisodes(list[i].name, list[i].id),
         );
         return;
       }
       const list = await this.withLoading(() => source.streams(kind, cat.id));
-      this.push(
-        new ListView({
-          title: cat.name,
-          items: list.map((s) => ({ label: s.name, icon: s.logo })),
-          onSelect: (i) => {
-            const s = list[i];
-            void this.openDetail({
-              title: s.name,
-              url: s.url,
-              kind: kind === 'live' ? 'live' : 'vod',
-              epgChannelId: s.epgChannelId,
-            });
-          },
-          onBack: () => this.pop(),
-          emptyText: 'Vazio',
-        }),
-      );
+      const items = list.map((s) => ({ label: s.name, icon: s.logo }));
+      const onSelect = (i: number): void => {
+        const s = list[i];
+        void this.openDetail({
+          title: s.name,
+          url: s.url,
+          kind: kind === 'live' ? 'live' : 'vod',
+          epgChannelId: s.epgChannelId,
+        });
+      };
+      if (kind === 'live') {
+        // canais: sempre lista (logos horizontais + espaco p/ EPG na linha)
+        this.push(
+          new ListView({ title: cat.name, items, onSelect, onBack: () => this.pop(), emptyText: 'Vazio' }),
+        );
+      } else {
+        this.pushBrowse(cat.name, items, onSelect);
+      }
     } catch (err) {
       this.fail(err);
     }
+  }
+
+  /**
+   * Filmes/Series: lista OU grade conforme a preferencia persistida, com
+   * toggle (tecla amarela / botao no header) que troca a tela no lugar
+   * preservando o item focado.
+   */
+  private pushBrowse(title: string, items: ListItem[], onSelect: (i: number) => void): void {
+    const make = (mode: ViewMode, initialIndex: number): ListView | GridView => {
+      const toggle = {
+        label: mode === 'grid' ? 'Lista' : 'Grade',
+        onToggle: (): void => {
+          const next: ViewMode = mode === 'grid' ? 'list' : 'grid';
+          setViewMode(next);
+          this.swapTop(make(next, view.focusedIndex));
+        },
+      };
+      const opts = {
+        title,
+        items,
+        initialIndex,
+        onSelect,
+        onBack: () => this.pop(),
+        emptyText: 'Vazio',
+        viewToggle: toggle,
+      };
+      const view = mode === 'grid' ? new GridView(opts) : new ListView(opts);
+      return view;
+    };
+    this.push(make(getViewMode(), 0));
   }
 
   private async openEpisodes(seriesName: string, seriesId: string): Promise<void> {

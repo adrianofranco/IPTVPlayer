@@ -15,6 +15,9 @@ html, body {
 /* --- telas --- */
 .screen { position: absolute; inset: 0; display: flex; flex-direction: column; }
 .screen-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
   padding: 18px 32px;
   font-size: 26px;
   font-weight: 600;
@@ -24,6 +27,20 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.header-title { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+/* alternar lista↔grade (espelha a tecla AMARELA do controle) */
+.view-toggle {
+  flex: none;
+  font-size: 16px;
+  font-weight: 400;
+  padding: 8px 14px;
+  border: 1px solid #3a3a4a;
+  border-radius: 8px;
+  background: #1f2937;
+  color: #eaeaea;
+  cursor: pointer;
+}
+.view-toggle.focused { background: #2563eb; border-color: #2563eb; box-shadow: 0 0 0 3px #ffffff66; }
 
 /* --- lista virtualizada (scroll controlado; sem scroll nativo) --- */
 .list-viewport { position: relative; flex: 1; overflow: hidden; }
@@ -53,6 +70,40 @@ html, body {
 .row-label { font-size: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row-sub { font-size: 15px; color: #9aa3b2; }
 .list-empty { padding: 48px 32px; color: #9aa3b2; font-size: 20px; }
+
+/* --- grade de capas (Filmes/Séries) — virtualizada por linha --- */
+.grid-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+.grid-cell {
+  flex: none;
+  box-sizing: border-box;
+  padding: 12px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.grid-cell.focused { background: #2563eb33; outline: 3px solid #2563eb; outline-offset: -3px; }
+.grid-poster {
+  height: 246px; /* capa ~2:3 na célula de ~200px */
+  border-radius: 8px;
+  background: #14141c;
+  overflow: hidden;
+}
+.grid-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.grid-label {
+  margin-top: 8px;
+  font-size: 15px;
+  line-height: 1.3;
+  height: 2.6em; /* 2 linhas */
+  overflow: hidden;
+  text-align: center;
+  color: #dfe6f0;
+}
 
 /* --- detalhe --- */
 .detail {

@@ -240,6 +240,40 @@ test('Seção: busca no header filtra só o tipo (Filmes)', async ({ page }) => 
   await expect(page.locator('.detail h1')).toBeVisible();
 });
 
+test('Grade: alterna lista↔grade em Filmes, navega 2D e persiste', async ({ page }) => {
+  await press(page, 'ArrowDown'); // Filmes
+  await enterAndWait(page); // categorias
+  await enterAndWait(page); // 1a categoria → itens (lista por padrão)
+  await expect.poll(() => topRows(page).count()).toBeGreaterThan(0);
+
+  // ▲ no topo da lista foca o botão do header; OK alterna pra grade
+  await press(page, 'ArrowUp');
+  await expect(page.locator('.view-toggle')).toHaveClass(/focused/);
+  await press(page, 'Enter');
+  const cells = page.locator('.grid-cell');
+  await expect(cells.first()).toBeVisible();
+  await expect(cells.first()).toHaveClass(/focused/); // posição preservada no swap
+
+  await press(page, 'ArrowRight'); // D-pad anda 1 item na grade
+  await expect(cells.nth(1)).toHaveClass(/focused/);
+
+  // ▲ da primeira linha da grade também foca o header; ▼ volta pra célula
+  await press(page, 'ArrowUp');
+  await expect(page.locator('.view-toggle')).toHaveClass(/focused/);
+  await expect(cells.nth(1)).not.toHaveClass(/focused/);
+  await press(page, 'ArrowDown');
+  await expect(cells.nth(1)).toHaveClass(/focused/);
+
+  await enterAndWait(page); // OK abre o detalhe a partir da grade
+  await expect(page.locator('.detail h1')).toBeVisible();
+
+  // preferência persiste: reabrir uma categoria já vem em grade
+  await press(page, 'Backspace'); // volta pra grade
+  await press(page, 'Backspace'); // volta pras categorias
+  await enterAndWait(page); // reabre a 1a categoria
+  await expect(page.locator('.grid-cell').first()).toBeVisible();
+});
+
 test('Player VOD: ◀/▶ acumulam seek exponencial com debounce (estilo YouTube)', async ({ page }) => {
   await press(page, 'ArrowDown'); // Filmes
   await enterAndWait(page); // categorias
